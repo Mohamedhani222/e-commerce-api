@@ -30,7 +30,7 @@ function search_model($model, $attrs, $query, $relation = null)
     if (!is_null($relation)) {
         $queryBuilder->orwhereHas($relation[0], function ($q) use ($query, $relation) {
             $q->where($relation[1], 'LIKE', '%' . $query . '%');
-        })->get();
+        });
     }
 
     return $queryBuilder->get();

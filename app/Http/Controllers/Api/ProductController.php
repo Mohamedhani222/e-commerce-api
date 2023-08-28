@@ -21,12 +21,14 @@ class ProductController extends Controller
 
     }
 
-    public function index(Request $request)
+    public function index()
     {
-        $products = Cache::remember('products', now()->addMinutes(60), function () {
-            return Product::all();
+        $page =request('page',1);
+
+        $products = Cache::tags(['products'])->remember('products'.$page, now()->addMinutes(60), function () {
+            return Product::paginate(5);
         });
-        $search = $request->query('s');
+        $search = request('s');
 
         if ($search) {
             $products = search_model(Product::orderBy('created_at', 'desc'), ['name', 'description'], $search, ['category']);
