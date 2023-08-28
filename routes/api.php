@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\PermissionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,15 +26,18 @@ Route::controller(AuthController::class)->prefix('auth')->group(function () {
 });
 
 // orders
-Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/cart', [OrderController::class, 'cart']);
-    Route::post('/remove_from_cart', [OrderController::class, 'remove_from_cart']);
+Route::middleware('auth:sanctum')->prefix('cart')->group(function () {
+    Route::get('/', [OrderController::class, 'cart']);
+    Route::post('/remove_item', [OrderController::class, 'remove_from_cart']);
+    Route::post('/add_qty', [OrderController::class, 'add_qty']);
+    Route::post('/sub_qty', [OrderController::class, 'sub_qty']);
 });
 
 Route::resources([
     'products' => ProductController::class,
     'orders' => OrderController::class,
     'roles' => RoleController::class,
+    'permissions' => PermissionController::class,
     'categories' => CategoryController::class
 ]);
 

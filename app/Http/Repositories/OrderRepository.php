@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use function App\check_user_has_order;
 use function App\search_model;
 
 class OrderRepository implements OrderInterface
@@ -118,14 +119,23 @@ class OrderRepository implements OrderInterface
         }
     }
 
-    public function addqty($request)
+    public function add_qty($request)
     {
         DB::beginTransaction();
         try {
+
+            $user = Auth::guard('sanctum')->user();
+
+
+            if (!check_user_has_order($request)) {
+                throw new \Exception('Invalid order_id');
+
+            }
+
             $order_item = OrderItem::findorFail($request->item_id);
 
-            $order_item->order()->total_price += $order_item->unit_price;
-            $order_item->order()->save();
+            $order_item->order->total_price += $order_item->unit_price;
+            $order_item->order->save();
 
             $order_item->quantity += 1;
             $order_item->total_price += $order_item->unit_price;
@@ -136,10 +146,11 @@ class OrderRepository implements OrderInterface
                 'message' => ' quantity Added Successfully !'
             ], 200);
 
-        } catch (ModelNotFoundException) {
+
+        } catch (ModelNotFoundException|\Exception $e) {
             DB::rollBack();
             return response()->json([
-                'message' => 'Something Wrong happened Please try again'
+                'message' => $e->getMessage()
             ], 404);
 
         }
@@ -147,10 +158,17 @@ class OrderRepository implements OrderInterface
 
     }
 
-    public function subqty($request)
+    public function sub_qty($request)
     {
         DB::beginTransaction();
         try {
+
+            if (!check_user_has_order($request)) {
+                throw new \Exception('Invalid order_id');
+
+            }
+
+
             $order_item = OrderItem::findorFail($request->item_id);
 
             $order_item->order()->total_price -= $order_item->unit_price;
@@ -238,13 +256,14 @@ class OrderRepository implements OrderInterface
 
     public function getOrdersForUser($request)
     {
-        $user = $user = Auth::guard('sanctum')->user();
+        $user = Auth::guard('sanctum')->user();
 
         if ($request->query('s')) {
-            $orders = search_model(Order::where('user', $user->id)->get(), ['status'], $request->query('s'), ['user_order', 'id']);
+            $orders = search_model(Order::where('user', $user->id), ['status'], $request->query('s'), ['user_order', 'name']);
         } else {
-            $orders = $user->all_orders()->with('order_items.product')->get();
+            $orders = $user->all_orders()->get();
         }
+        $orders->load('order_items.product');
         return OrderResource::collection($orders);
 
     }
@@ -255,7 +274,7 @@ class OrderRepository implements OrderInterface
         $order->total_price += $qty * $product->price;
         $order->save();
 
-            // check if item exist in user cart and update if not create new one
+        // check if item exist in user cart and update if not create new one
         $order_item = OrderItem::where(['order_id' => $order->id, 'product_id' => $product->id])->first();
 
         if ($order_item) {

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\interfaces\OrderInterface;
+use App\Http\Requests\CartRequest;
 use App\Models\Order;
 use Illuminate\Http\Request;
 
@@ -16,7 +17,7 @@ class OrderController extends Controller
     {
         $this->order_interface = $order_interface;
         $this->middleware(['auth:sanctum', 'permission:list order'])->only('index', 'show', 'cart');
-        $this->middleware(['auth:sanctum', 'permission:create order|create orderitem'])->only('create', 'store');
+        $this->middleware(['auth:sanctum', 'permission:create order'])->only('create', 'store');
         $this->middleware(['auth:sanctum', 'permission:update order'])->only('update', 'edit');
         $this->middleware(['auth:sanctum', 'permission:delete order'])->only('destroy');
         $this->middleware(['auth:sanctum', 'permission:delete orderitem'])->only('remove_from_cart');
@@ -29,7 +30,7 @@ class OrderController extends Controller
     }
 
 
-    public function store(Request $request)
+    public function store(CartRequest $request)
     {
         return $this->order_interface->store($request);
     }
@@ -54,4 +55,16 @@ class OrderController extends Controller
     {
         return $this->order_interface->destroy($order);
     }
+
+    public function add_qty(Request $request)
+    {
+        return $this->order_interface->add_qty($request);
+    }
+
+    public function sub_qty(Request $request)
+    {
+        return $this->order_interface->sub_qty($request);
+    }
+
+
 }

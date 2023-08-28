@@ -13,8 +13,9 @@ class Order_item_Resource extends JsonResource
     {
 
         return [
+            'id' =>$this->id,
             'total_price' => $this->total_price,
-            'product' => new ProductResource($this->whenLoaded('product')),
+            'product' => ProductResource::make($this->whenLoaded('product')),
             'unit_price' => $this->unit_price,
             'quantity' => $this->quantity
 

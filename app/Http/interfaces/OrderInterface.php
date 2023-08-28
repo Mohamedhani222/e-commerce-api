@@ -16,5 +16,7 @@ interface OrderInterface
 
     public function remove_from_cart($request);
 
+    public function add_qty($request);
 
+    public function sub_qty($request);
 }

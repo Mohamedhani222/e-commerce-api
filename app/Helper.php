@@ -38,7 +38,22 @@ function search_model($model, $attrs, $query, $relation = null)
 }
 
 
+function check_user_has_order($request)
+{
+    $user = Auth::guard('sanctum')->user();
 
+    $orderItemIds = $user->cart()
+        ->with('order_items')
+        ->get()
+        ->pluck('order_items')
+        ->flatten()
+        ->pluck('id')
+        ->toArray();
+
+   return (in_array($request->item_id, $orderItemIds));
+
+
+}
 
 
 
