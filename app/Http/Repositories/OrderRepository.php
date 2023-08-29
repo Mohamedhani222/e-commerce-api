@@ -9,25 +9,27 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use function App\check_user_has_order;
-use function App\search_model;
+use function App\check_user_has_order_item;
+use function App\confirm_price;
+use function App\getOrdersForSuperAdmin;
+use function App\getOrdersForUser;
+use function App\updateOrderAndOrderItem;
 
 class OrderRepository implements OrderInterface
 {
 
-    public function index($request)
+    public function index($request): \Illuminate\Http\JsonResponse|\Illuminate\Http\Resources\Json\AnonymousResourceCollection
     {
         $user = Auth::guard('sanctum')->user();
 
         if ($user->hasRole('SuperAdmin')) {
 
-            return $this->getOrdersForSuperAdmin($request);
+            return getOrdersForSuperAdmin($request);
 
         } elseif ($user->hasRole(["user"])) {
 
-            return $this->getOrdersForUser($request);
+            return getOrdersForUser($request);
         }
 
         return response()->json([
@@ -37,7 +39,7 @@ class OrderRepository implements OrderInterface
     }
 
     // add_to_cart
-    public function store($request)
+    public function store($request): \Illuminate\Http\JsonResponse
     {
         DB::beginTransaction();
         try {
@@ -45,15 +47,15 @@ class OrderRepository implements OrderInterface
             $product = Product::findorFail($request->product_id);
             $qty = $request->input('qty');
 
-            $order = $user->cart()->firstOrCreate(['user' => $user->id]);
-            $this->updateOrderAndOrderItem($order, $product, $qty);
+            $order = $user->orders()->Status('IN_CART')->firstOrCreate(['user' => $user->id]);
+            updateOrderAndOrderItem($order, $product, $qty);
 
             DB::commit();
             return response()->json([
-                'message' => 'Added To Cart Successfully'
-            ], 200);
+                'message' => 'Added To Cart Successfully !'
+            ]);
 
-        } catch (\Throwable $e) {
+        } catch (\Throwable|ModelNotFoundException $e) {
             DB::rollBack();
             return response()->json([
                 'message' => $e->getMessage()
@@ -63,13 +65,13 @@ class OrderRepository implements OrderInterface
     }
 
 
-    public function show($id)
+    public function show($id): \Illuminate\Http\JsonResponse|OrderResource
     {
         try {
             $user = Auth::guard('sanctum')->user();
 
             if ($user->hasRole('user')) {
-                if (!$user->all_orders()->pluck('id')->contains($id)) {
+                if (!$user->orders()->pluck('id')->contains($id)) {
                     return response()->json([
                         'message' => 'you dont have order with this id'
                     ], 404);
@@ -98,7 +100,7 @@ class OrderRepository implements OrderInterface
 
     }
 
-    public function destroy($order)
+    public function destroy($order): \Illuminate\Http\JsonResponse
     {
         DB::beginTransaction();
         try {
@@ -119,7 +121,7 @@ class OrderRepository implements OrderInterface
         }
     }
 
-    public function add_qty($request)
+    public function add_qty($request): \Illuminate\Http\JsonResponse
     {
         DB::beginTransaction();
         try {
@@ -127,7 +129,7 @@ class OrderRepository implements OrderInterface
             $user = Auth::guard('sanctum')->user();
 
 
-            if (!check_user_has_order($request)) {
+            if (!check_user_has_order_item($request)) {
                 throw new \Exception('Invalid order_id');
 
             }
@@ -158,29 +160,28 @@ class OrderRepository implements OrderInterface
 
     }
 
-    public function sub_qty($request)
+    public function sub_qty($request): \Illuminate\Http\JsonResponse
     {
         DB::beginTransaction();
         try {
 
-            if (!check_user_has_order($request)) {
+            if (!check_user_has_order_item($request)) {
                 throw new \Exception('Invalid order_id');
 
             }
-
 
             $order_item = OrderItem::findorFail($request->item_id);
 
             $order_item->order()->total_price -= $order_item->unit_price;
             $order_item->order()->save();
 
-            $order_item->quantity += 1;
+            $order_item->quantity -= 1;
             $order_item->total_price -= $order_item->unit_price;
             $order_item->save();
             DB::commit();
 
             return response()->json([
-                'message' => ' quantity decreased Successfully !'
+                'message' => 'quantity decreased Successfully !'
             ], 200);
 
         } catch (ModelNotFoundException) {
@@ -194,7 +195,7 @@ class OrderRepository implements OrderInterface
 
     }
 
-    public function remove_from_cart($request)
+    public function remove_from_cart($request): \Illuminate\Http\JsonResponse
     {
         DB::beginTransaction();
         try {
@@ -203,10 +204,10 @@ class OrderRepository implements OrderInterface
 
             $order_item = OrderItem::where([
                 'id' => $request->item_id,
-                'order_id' => $user->cart()->pluck('id'),
+                'order_id' => $user->orders()->Status('IN_CART')->pluck('id'),
             ])->firstorFail();
 
-            $order = $user->cart()->first();
+            $order = $user->orders()->Status('IN_CART')->first();
             $order->total_price -= $order_item->unit_price * $order_item->quantity;
             $order->save();
 
@@ -228,71 +229,48 @@ class OrderRepository implements OrderInterface
     }
 
 
-    public function cart()
+    public function cart(): \Illuminate\Http\JsonResponse|OrderResource
+    {
+        try {
+            $user = Auth::guard('sanctum')->user();
+            $order = $user->orders()->Status('IN_CART')->first();
+            $order->load('order_items.product');
+            return new OrderResource($order);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 403);
+
+        }
+    }
+
+
+    public function confirm_order($id): \Illuminate\Http\JsonResponse
     {
         $user = Auth::guard('sanctum')->user();
-        $order = $user->cart()->first();
-        $order->load('order_items.product');
-        return new OrderResource($order);
-    }
+        $order = $user->orders()->Status('IN_CART')->find($id);
 
+        if (!$order) {
+            return response()->json([
+                'message' => 'Order Not Found !'
+            ], 403);
 
-    public function getOrdersForSuperAdmin($request)
-    {
-        if ($request->query('s')) {
-            $orders = search_model(Order::with(['user_order', 'order_items.product']), ['status'], $request->query('s'), ['user_order', 'name']);
-        } else {
-            $orders = Cache::remember(
-                'orders_for_Super_Admin',
-                now()->addMinute(150),
-                function () {
-                    return Order::with(['user_order', 'order_items.product'])->get();
-                }
-            );
         }
-        return OrderResource::collection($orders);
-
-    }
-
-    public function getOrdersForUser($request)
-    {
-        $user = Auth::guard('sanctum')->user();
-
-        if ($request->query('s')) {
-            $orders = search_model(Order::where('user', $user->id), ['status'], $request->query('s'), ['user_order', 'name']);
-        } else {
-            $orders = $user->all_orders()->get();
-        }
-        $orders->load('order_items.product');
-        return OrderResource::collection($orders);
-
-    }
-
-    private function updateOrderAndOrderItem($order, $product, $qty)
-    {
-
-        $order->total_price += $qty * $product->price;
+        confirm_price($id);
+        $order->status = 'PENDING';
         $order->save();
-
-        // check if item exist in user cart and update if not create new one
-        $order_item = OrderItem::where(['order_id' => $order->id, 'product_id' => $product->id])->first();
-
-        if ($order_item) {
-            $order_item->total_price += $qty * $product->price;
-            $order_item->quantity += $qty;
-            $order_item->save();
-        } else {
-            $cart = OrderItem::create([
-                'product_id' => $product->id,
-                'order_id' => $order->id,
-                'quantity' => $qty,
-                'unit_price' => $product->price
-            ]);
-            $cart->total_price = $qty * $product->price;
-            $cart->save();
-        }
-
+        return response()->json([
+            'message' => 'Order confirmed successfully '
+        ], 200);
 
     }
 
+//    public function order_coupon()
+//    {
+//
+//    }
 }
+
+
+
+

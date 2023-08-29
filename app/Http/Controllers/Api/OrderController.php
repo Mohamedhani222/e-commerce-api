@@ -66,5 +66,9 @@ class OrderController extends Controller
         return $this->order_interface->sub_qty($request);
     }
 
+    public function confirm_order($id)
+    {
+        return $this->order_interface->confirm_order($id);
+    }
 
 }

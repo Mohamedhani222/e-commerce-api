@@ -2,6 +2,8 @@
 
 namespace App\Http\interfaces;
 
+use App\Models\Order;
+
 interface OrderInterface
 {
     public function index($request);
@@ -19,4 +21,6 @@ interface OrderInterface
     public function add_qty($request);
 
     public function sub_qty($request);
+
+    public function confirm_order($id);
 }

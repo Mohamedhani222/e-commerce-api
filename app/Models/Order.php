@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Barryvdh\LaravelIdeHelper\Eloquent;
+use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -56,6 +57,13 @@ class Order extends Model
         return $this->belongsTo(User::class ,'user');
     }
 
+    public function scopeStatus(Builder $query, string $type): void
+    {
+        $query->where('status', $type);
+    }
 
-
+    public function coupon()
+    {
+        $this->hasOne(Coupon::class ,'coupon_id');
+    }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -76,14 +77,11 @@ class AuthController extends Controller
             }
 
             $user = User::where('email', $request->email)->first();
-
+            $user->load('roles.permissions');
             return response()->json([
                 'status' => true,
                 'message' => 'User Logged In Successfully',
-                'user' => User::with(['roles' => function ($query) {
-                    $query->select('name')->with('permissions');
-                }, 'permissions'])->find($user->id),
-
+                'user' => UserResource::make($user),
                 'token' => $user->createToken("token")->plainTextToken
             ], 200);
 

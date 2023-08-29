@@ -23,6 +23,7 @@ class OrderResource extends JsonResource
             'is_finished' => $this->is_finished,
             'is_paid' => $this->is_paid,
             'paid_at' => $this->paid_at,
+            'status' =>$this->status,
             'order_items' => Order_item_Resource::collection($this->whenLoaded('order_items'))
         ];
 
